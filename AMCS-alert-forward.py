@@ -27,15 +27,37 @@ class CowrieLogHandler(FileSystemEventHandler):
                 while line:
                     try:
                         log_entry = json.loads(line)
-                        if log_entry.get("eventid") == "cowrie.login.failed":
-                            message = f"Failed login attempt detected!\n" \
-                                      f"IP: {log_entry.get('src_ip')}\n" \
-                                      f"Username: {log_entry.get('username')}\n" \
-                                      f"Password: {log_entry.get('password')}"
+                        message = self.create_alert_message(log_entry)
+                        if message:
                             send_mattermost_alert(message)
                     except json.JSONDecodeError:
                         pass
                     line = f.readline()
+
+    def create_alert_message(self, log_entry):
+        event_id = log_entry.get("eventid")
+        if event_id.startswith("cowrie."):
+            message = f"SSH Activity Detected: {event_id}\n"
+            message += f"IP: {log_entry.get('src_ip')}\n"
+
+            if event_id in ["cowrie.login.success", "cowrie.login.failed"]:
+                message += f"Username: {log_entry.get('username')}\n"
+                message += f"Password: {log_entry.get('password')}\n"
+            elif event_id == "cowrie.session.connect":
+                message += f"Protocol: {log_entry.get('protocol')}\n"
+            elif event_id == "cowrie.command.input":
+                message += f"Command: {log_entry.get('input')}\n"
+            elif event_id == "cowrie.client.version":
+                message += f"Version: {log_entry.get('version')}\n"
+            elif event_id == "cowrie.client.size":
+                message += f"Width: {log_entry.get('width')}, Height: {log_entry.get('height')}\n"
+            elif event_id == "cowrie.session.file_download":
+                message += f"File: {log_entry.get('url')}\n"
+            elif event_id == "cowrie.session.closed":
+                message += f"Duration: {log_entry.get('duration')} seconds\n"
+
+            return message
+        return None
 
 if __name__ == "__main__":
     event_handler = CowrieLogHandler()
